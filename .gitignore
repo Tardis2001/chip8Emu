@@ -1,7 +1,7 @@
 # Prerequisites
 *.d
-
 # Object files
+src/*.o
 *.o
 *.ko
 *.obj
@@ -35,7 +35,7 @@
 *.i*86
 *.x86_64
 *.hex
-
+chip8
 # Debug files
 *.dSYM/
 *.su
@@ -53,3 +53,6 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+
+.vscode/
