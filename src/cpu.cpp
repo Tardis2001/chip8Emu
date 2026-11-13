@@ -78,11 +78,11 @@ bool Cpu::execute(uint16_t opcode) {
             return true;
 
         case 0x2000:
-            // 0x2NNN - chamar subrotina: empilha PC+2, PC = NNN
+            // 0x2NNN - chamar subrotina: empilha endereco de retorno (pc + 2), PC = NNN
             if (sp >= STACK_SIZE) {
                 return false; // pilha cheia
             }
-            stack[sp] = pc;
+            stack[sp] = static_cast<uint16_t>(pc + 2);
             ++sp;
             pc = nnn;
             return true;
@@ -109,7 +109,11 @@ bool Cpu::execute(uint16_t opcode) {
             // 0xDXYN - desenhar sprite de N bytes a partir de I em (Vx, Vy)
             {
                 uint8_t height = n;
-                drawFlag = false; // limpa draw flag antes de desenhar
+                bool collision = false;
+
+                // Captura as coordenadas antes de qualquer alteracao em VF
+                uint8_t coordX = v[x];
+                uint8_t coordY = v[y];
 
                 for (uint8_t row = 0; row < height; ++row) {
                     uint8_t spriteByte = 0;
@@ -123,16 +127,23 @@ bool Cpu::execute(uint16_t opcode) {
                             continue;
                         }
 
-                        int screenX = (v[x] + col) % 64;
-                        int screenY = (v[y] + row) % 32;
+                        int screenX = (coordX + col) % 64;
+                        int screenY = (coordY + row) % 32;
 
                         bool current = display.getPixel(screenX, screenY);
-                        if (current && spritePixel) {
-                            drawFlag = true; // colisao detectada
+                        if (current) {
+                            collision = true;
                         }
                         display.setPixel(screenX, screenY, current ^ spritePixel);
                     }
                 }
+
+                // VF = 1 se houve colisao, 0 caso contrario
+                v[0xF] = collision ? 1 : 0;
+
+                // Draw flag: sempre verdadeiro apos um opcode de desenho,
+                // para que o loop de renderizacao redesenhe o display.
+                drawFlag = true;
 
                 pc += 2;
                 return true;

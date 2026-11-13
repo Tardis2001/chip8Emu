@@ -74,3 +74,80 @@ O sistema SHALL buscar opcodes e ler/escrever dados utilizando a capacidade de m
 
 - **WHEN** a CPU solicita a leitura de um byte em um endereco valido da memoria
 - **THEN** o byte retornado vem da memoria ja existente
+
+### Requirement: Opcode 0x6XNN - definir registrador Vx
+
+O sistema SHALL implementar o opcode 0x6XNN, que define o registrador Vx com o valor byte NN.
+
+#### Scenario: Definir Vx com valor imediato
+
+- **WHEN** o opcode 0x6XNN é executado com NN igual a um valor byte
+- **THEN** o registrador Vx contem o valor NN
+
+### Requirement: Opcode 0x7XNN - adicionar ao registrador Vx
+
+O sistema SHALL implementar o opcode 0x7XNN, que adiciona o valor byte NN ao registrador Vx (sem carry para VF).
+
+#### Scenario: Adicionar valor imediato a Vx
+
+- **WHEN** o opcode 0x7XNN é executado com NN igual a um valor byte
+- **THEN** o registrador Vx contem o resultado da adicao modulo 256
+
+### Requirement: Opcode 0xANNN - definir registrador indice I
+
+O sistema SHALL implementar o opcode 0xANNN, que define o registrador indice I com o endereço NNN.
+
+#### Scenario: Definir I com endereco imediato
+
+- **WHEN** o opcode 0xANNN é executado com NNN igual a um endereco de 12 bits
+- **THEN** o registrador I contem o valor NNN
+
+### Requirement: Opcode 0x1NNN - pular para endereco
+
+O sistema SHALL implementar o opcode 0x1NNN, que define o program counter PC como o endereço NNN.
+
+#### Scenario: Pular para endereco imediato
+
+- **WHEN** o opcode 0x1NNN é executado com NNN igual a um endereco valido
+- **THEN** o program counter PC contem o valor NNN
+
+### Requirement: Opcode 0x2NNN - chamar subrotina
+
+O sistema SHALL implementar o opcode 0x2NNN, que chama uma subrotina no endereço NNN, empilhando o endereco de retorno atual.
+
+#### Scenario: Chamar subrotina empilha retorno
+
+- **WHEN** o opcode 0x2NNN é executado
+- **THEN** o endereco atual do PC e empilhado e o PC e definido como NNN
+
+### Requirement: Opcode 0x00EE - retornar de subrotina
+
+O sistema SHALL implementar o opcode 0x00EE, que retorna de uma subrotina, desempilhando o endereco de retorno para o PC.
+
+#### Scenario: Retornar de subrotina desempilha PC
+
+- **WHEN** o opcode 0x00EE é executado apos uma chamada de subrotina
+- **THEN** o PC e definido com o endereco desempilhado e o stack pointer e decrementado
+
+### Requirement: Opcode 0xDXYN - desenhar sprite
+
+O sistema SHALL implementar o opcode 0xDXYN, que desenha um sprite de N bytes na posicao (Vx, Vy) do display, usando o registrador I como endereco inicial dos dados do sprite, e define VF como 1 se houver colisao de pixels ou 0 caso contrario.
+
+#### Scenario: Desenhar sprite no display
+
+- **WHEN** o opcode 0xDXYN é executado com coordenadas validas e dados de sprite na memoria
+- **THEN** o sprite eh desenhado no display na posicao (Vx, Vy) e VF reflete se ocorreu colisao
+
+### Requirement: Draw flag
+
+O sistema SHALL fornecer um draw flag que indica quando o display deve ser redesenhado apos a execucao de um opcode de desenho.
+
+#### Scenario: Draw flag definido apos desenho
+
+- **WHEN** o opcode 0xDXYN e executado
+- **THEN** o draw flag eh definido como verdadeiro
+
+#### Scenario: Draw flag lido e limpo
+
+- **WHEN** o draw flag eh lido pelo loop de renderizacao
+- **THEN** o draw flag eh limpo (definido como falso) apos a leitura
