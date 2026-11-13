@@ -1,8 +1,9 @@
 #include "cpu.h"
+#include "display.h"
 
 namespace chip8 {
 
-Cpu::Cpu(Memory& mem) : memory(mem) {
+Cpu::Cpu(Memory& mem, Display& disp) : memory(mem), display(disp) {
     reset();
 }
 
@@ -23,6 +24,13 @@ void Cpu::reset() {
         stack[level] = 0;
     }
     sp = 0;
+
+    // Draw flag inicia desligado
+    drawFlag = false;
+}
+
+void Cpu::clearDrawFlag() {
+    drawFlag = false;
 }
 
 bool Cpu::fetch(uint16_t& opcode) {
@@ -42,11 +50,99 @@ bool Cpu::fetch(uint16_t& opcode) {
 }
 
 bool Cpu::execute(uint16_t opcode) {
-    // Neste escopo, nenhum opcode e implementado ainda.
-    // O ciclo de execucao e valido: busca e decodificacao funcionam,
-    // mas a execucao de opcodes especificos fica para uma mudança posterior.
-    (void)opcode;
-    return true;
+    uint16_t nnn = opcode & 0x0FFF;   // endereco de 12 bits
+    uint8_t  x   = (opcode & 0x0F00) >> 8;   // registrador Vx
+    uint8_t  y   = (opcode & 0x00F0) >> 4;   // registrador Vy
+    uint8_t  n   = opcode & 0x000F;   // nibble inferior (altura do sprite)
+    uint8_t  kk  = opcode & 0x00FF;   // byte imediato
+
+    // Decodifica pelo primeiro nibble
+    switch (opcode & 0xF000) {
+        case 0x0000:
+            if (opcode == 0x00EE) {
+                // 0x00EE - retornar de subrotina: desempilha PC
+                if (sp == 0) {
+                    return false; // pilha vazia, nada para retornar
+                }
+                --sp;
+                pc = stack[sp];
+                return true;
+            }
+            // Outros opcodes 0x0xxx nao implementados neste escopo
+            pc += 2;
+            return true;
+
+        case 0x1000:
+            // 0x1NNN - pular para endereco NNN
+            pc = nnn;
+            return true;
+
+        case 0x2000:
+            // 0x2NNN - chamar subrotina: empilha PC+2, PC = NNN
+            if (sp >= STACK_SIZE) {
+                return false; // pilha cheia
+            }
+            stack[sp] = pc;
+            ++sp;
+            pc = nnn;
+            return true;
+
+        case 0x6000:
+            // 0x6XNN - Vx = NN
+            v[x] = kk;
+            pc += 2;
+            return true;
+
+        case 0x7000:
+            // 0x7XNN - Vx += NN (modulo 256, sem carry para VF)
+            v[x] = static_cast<uint8_t>(v[x] + kk);
+            pc += 2;
+            return true;
+
+        case 0xA000:
+            // 0xANNN - I = NNN
+            i = nnn;
+            pc += 2;
+            return true;
+
+        case 0xD000:
+            // 0xDXYN - desenhar sprite de N bytes a partir de I em (Vx, Vy)
+            {
+                uint8_t height = n;
+                drawFlag = false; // limpa draw flag antes de desenhar
+
+                for (uint8_t row = 0; row < height; ++row) {
+                    uint8_t spriteByte = 0;
+                    if (!memory.read(static_cast<uint16_t>(i + row), spriteByte)) {
+                        return false;
+                    }
+
+                    for (uint8_t col = 0; col < 8; ++col) {
+                        bool spritePixel = (spriteByte & (0x80 >> col)) != 0;
+                        if (!spritePixel) {
+                            continue;
+                        }
+
+                        int screenX = (v[x] + col) % 64;
+                        int screenY = (v[y] + row) % 32;
+
+                        bool current = display.getPixel(screenX, screenY);
+                        if (current && spritePixel) {
+                            drawFlag = true; // colisao detectada
+                        }
+                        display.setPixel(screenX, screenY, current ^ spritePixel);
+                    }
+                }
+
+                pc += 2;
+                return true;
+            }
+
+        default:
+            // Opcodes nao implementados: ignorar e continuar
+            pc += 2;
+            return true;
+    }
 }
 
 bool Cpu::runCycle() {
@@ -57,13 +153,10 @@ bool Cpu::runCycle() {
         return false;
     }
 
-    // 2. Decodificacao e execucao
+    // 2. Decodificacao e execucao (execute() gerencia o PC)
     if (!execute(opcode)) {
         return false;
     }
-
-    // 3. PC avanca 2 posicoes para o proximo opcode
-    pc = static_cast<uint16_t>(pc + 2);
 
     return true;
 }

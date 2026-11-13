@@ -3,20 +3,22 @@
 
 #include <cstdint>
 
+#include "display.h"
 #include "memory.h"
 
 namespace chip8 {
 
 // CPU do CHIP-8: registradores, estado de execucao e ciclo fetch-decode-execute.
-// Integra-se com a camada de memoria ja existente (chip8-memory).
+// Integra-se com a camada de memoria ja existente (chip8-memory)
+// e com o display (sdl3-display) para renderizacao de sprites.
 class Cpu {
 public:
     static constexpr int NUM_REGS = 16;   // V0–VF
     static constexpr int STACK_SIZE = 16; // pilha de 16 niveis
     static constexpr uint16_t PC_START = 0x200;
 
-    // Construtor recebe a referencia para a memoria do emulador
-    Cpu(Memory& mem);
+    // Construtor recebe referencias para a memoria e o display do emulador
+    Cpu(Memory& mem, Display& disp);
 
     // Registradores de proposito geral V0–VF
     uint8_t v[NUM_REGS];
@@ -34,6 +36,12 @@ public:
     // Referencia a memoria do emulador (fornecida externamente)
     Memory& memory;
 
+    // Referencia ao display do emulador (fornecida externamente)
+    Display& display;
+
+    // Draw flag: definido como true pelo opcode 0xDXYN, lido e limpo pelo loop de renderizacao.
+    bool drawFlag;
+
     // Busca um opcode de 2 bytes no endereco atual do PC.
     // Retorna false se nao conseguir ler da memoria.
     bool fetch(uint16_t& opcode);
@@ -43,6 +51,9 @@ public:
 
     // Executa um ciclo completo: busca, decodifica e executa.
     bool runCycle();
+
+    // Limpa o draw flag (chamado pelo loop de renderizacao apos ler).
+    void clearDrawFlag();
 
 private:
     // Inicializa registradores, PC, pilha e stack pointer.

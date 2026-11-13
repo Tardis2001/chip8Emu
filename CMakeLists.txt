@@ -7,7 +7,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(SDL3 CONFIG REQUIRED)
 find_package(SDL3_image CONFIG REQUIRED)
 find_package(SDL3_ttf CONFIG REQUIRED)
-add_executable(chip8 src/main.cpp src/display.cpp src/memory.cpp src/cpu.cpp)
-  
+add_executable(chip8 src/main.cpp src/display.cpp src/memory.cpp src/cpu.cpp src/rom-loader.cpp)
+
+target_include_directories(chip8 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+
   # Link against the canonical SDL3 target
 target_link_libraries(chip8 PRIVATE SDL3::SDL3 SDL3_ttf::SDL3_ttf $<IF:$<TARGET_EXISTS:SDL3_image::SDL3_image-shared>,SDL3_image::SDL3_image-shared,SDL3_image::SDL3_image-static>)
