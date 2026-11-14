@@ -16,6 +16,29 @@ struct AudioData {
     double phase = 0.0;
 };
 
+// Mapeia um scancode SDL para o indice CHIP-8 (0x0-0xF). Retorna -1 se nao mapeado.
+int scancodeToChip8Key(SDL_Scancode sc) {
+    switch (sc) {
+        case SDL_SCANCODE_1: return 0x1;
+        case SDL_SCANCODE_2: return 0x2;
+        case SDL_SCANCODE_3: return 0x3;
+        case SDL_SCANCODE_4: return 0xC;
+        case SDL_SCANCODE_Q: return 0x4;
+        case SDL_SCANCODE_W: return 0x5;
+        case SDL_SCANCODE_E: return 0x6;
+        case SDL_SCANCODE_R: return 0xD;
+        case SDL_SCANCODE_A: return 0x7;
+        case SDL_SCANCODE_S: return 0x8;
+        case SDL_SCANCODE_D: return 0x9;
+        case SDL_SCANCODE_F: return 0xE;
+        case SDL_SCANCODE_Z: return 0xA;
+        case SDL_SCANCODE_X: return 0x0;
+        case SDL_SCANCODE_C: return 0xB;
+        case SDL_SCANCODE_V: return 0xF;
+        default: return -1;
+    }
+}
+
 // Callback de áudio: gera onda quadrada (440 Hz) enquanto soundActive for true,
 // silêncio caso contrário. Chamada pela thread de áudio do SDL3.
 void SDLCALL audioCallback(void* userdata, SDL_AudioStream* stream, int additional_amount, int /*total_amount*/) {
@@ -132,6 +155,11 @@ int main(int argc, char* argv[]) {
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_EVENT_QUIT) {
                 running = false;
+            } else if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) {
+                int chip8Key = scancodeToChip8Key(event.key.scancode);
+                if (chip8Key >= 0) {
+                    cpu.setKey(static_cast<uint8_t>(chip8Key), event.type == SDL_EVENT_KEY_DOWN);
+                }
             }
         }
 

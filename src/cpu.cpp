@@ -20,6 +20,11 @@ void Cpu::reset() {
     delayTimer = 0;
     soundTimer = 0;
 
+    // Teclado inicia com todas as teclas soltas
+    for (int k = 0; k < 16; ++k) {
+        keys[k] = 0;
+    }
+
     // Program counter inicia em 0x200 (inicio dos programas CHIP-8)
     pc = PC_START;
 
@@ -43,6 +48,12 @@ void Cpu::tickTimers() {
     }
     if (soundTimer > 0) {
         --soundTimer;
+    }
+}
+
+void Cpu::setKey(uint8_t key, bool pressed) {
+    if (key < 16) {
+        keys[key] = pressed ? 1 : 0;
     }
 }
 
@@ -162,6 +173,31 @@ bool Cpu::execute(uint16_t opcode) {
                 return true;
             }
 
+        case 0xE000:
+            // 0xEX** - opcodes de teclado
+            switch (kk) {
+                case 0x9E:
+                    // 0xEX9E - pular se tecla Vx pressionada
+                    if (v[x] < 16 && keys[v[x]]) {
+                        pc += 4; // avanca 2 instrucoes alem do normal
+                    } else {
+                        pc += 2;
+                    }
+                    return true;
+                case 0xA1:
+                    // 0xEXA1 - pular se tecla Vx nao pressionada
+                    if (v[x] < 16 && !keys[v[x]]) {
+                        pc += 4;
+                    } else {
+                        pc += 2;
+                    }
+                    return true;
+                default:
+                    // Outros sub-opcodes 0xEX* nao implementados
+                    pc += 2;
+                    return true;
+            }
+
         case 0xF000:
             // 0xFX** - opcodes de timer (e outros 0xFX* nao implementados)
             switch (kk) {
@@ -180,6 +216,26 @@ bool Cpu::execute(uint16_t opcode) {
                     soundTimer = v[x];
                     pc += 2;
                     return true;
+                case 0x0A:
+                    // 0xFX0A - aguardar tecla: bloqueia ate uma tecla ser pressionada
+                    {
+                        bool keyPressed = false;
+                        uint8_t pressedKey = 0;
+                        for (int k = 0; k < 16; ++k) {
+                            if (keys[k]) {
+                                keyPressed = true;
+                                pressedKey = static_cast<uint8_t>(k);
+                                break;
+                            }
+                        }
+                        if (!keyPressed) {
+                            // Nenhuma tecla pressionada: nao avanca o PC (bloqueia)
+                            return true;
+                        }
+                        v[x] = pressedKey;
+                        pc += 2;
+                        return true;
+                    }
                 default:
                     // Outros sub-opcodes 0xFX* nao implementados neste escopo
                     pc += 2;

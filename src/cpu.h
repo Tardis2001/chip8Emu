@@ -30,6 +30,9 @@ public:
     uint8_t delayTimer;
     uint8_t soundTimer;
 
+    // Estado do teclado CHIP-8: 16 teclas (0x0-0xF), 0 = solta, 1 = pressionada
+    uint8_t keys[16];
+
     // Program counter: endereco da proxima instrucao
     uint16_t pc;
 
@@ -61,6 +64,9 @@ public:
 
     // Decrementa os timers de delay e som (se > 0) em 1. Chamado a 60 Hz.
     void tickTimers();
+
+    // Define o estado de uma tecla CHIP-8 (0x0-0xF). Ignora indices invalidos.
+    void setKey(uint8_t key, bool pressed);
 
 private:
     // Inicializa registradores, PC, pilha e stack pointer.
