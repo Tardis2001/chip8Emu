@@ -1,6 +1,8 @@
 #include "cpu.h"
 #include "display.h"
 
+#include <cstdlib>
+
 namespace chip8 {
 
 Cpu::Cpu(Memory& mem, Display& disp) : memory(mem), display(disp) {
@@ -92,6 +94,12 @@ bool Cpu::execute(uint16_t opcode) {
                 pc = stack[sp];
                 return true;
             }
+            if (opcode == 0x00E0) {
+                // 0x00E0 - limpar display
+                display.clearDisplay();
+                pc += 2;
+                return true;
+            }
             // Outros opcodes 0x0xxx nao implementados neste escopo
             pc += 2;
             return true;
@@ -111,6 +119,33 @@ bool Cpu::execute(uint16_t opcode) {
             pc = nnn;
             return true;
 
+        case 0x3000:
+            // 0x3XNN - pular se Vx == NN
+            if (v[x] == kk) {
+                pc += 4;
+            } else {
+                pc += 2;
+            }
+            return true;
+
+        case 0x4000:
+            // 0x4XNN - pular se Vx != NN
+            if (v[x] != kk) {
+                pc += 4;
+            } else {
+                pc += 2;
+            }
+            return true;
+
+        case 0x5000:
+            // 0x5XY0 - pular se Vx == Vy (apenas quando n == 0)
+            if (n == 0 && v[x] == v[y]) {
+                pc += 4;
+            } else {
+                pc += 2;
+            }
+            return true;
+
         case 0x6000:
             // 0x6XNN - Vx = NN
             v[x] = kk;
@@ -123,9 +158,95 @@ bool Cpu::execute(uint16_t opcode) {
             pc += 2;
             return true;
 
+        case 0x8000:
+            // 0x8XY** - operacoes logicas/aritmeticas entre registradores
+            switch (n) {
+                case 0x0:
+                    // 0x8XY0 - Vx = Vy
+                    v[x] = v[y];
+                    pc += 2;
+                    return true;
+                case 0x1:
+                    // 0x8XY1 - Vx |= Vy (OR bitwise)
+                    v[x] = static_cast<uint8_t>(v[x] | v[y]);
+                    pc += 2;
+                    return true;
+                case 0x2:
+                    // 0x8XY2 - Vx &= Vy (AND bitwise)
+                    v[x] = static_cast<uint8_t>(v[x] & v[y]);
+                    pc += 2;
+                    return true;
+                case 0x3:
+                    // 0x8XY3 - Vx ^= Vy (XOR bitwise)
+                    v[x] = static_cast<uint8_t>(v[x] ^ v[y]);
+                    pc += 2;
+                    return true;
+                case 0x4:
+                    // 0x8XY4 - Vx += Vy com carry para VF
+                    {
+                        uint16_t result = static_cast<uint16_t>(v[x]) + static_cast<uint16_t>(v[y]);
+                        v[0xF] = (result > 0xFF) ? 1 : 0;
+                        v[x] = static_cast<uint8_t>(result & 0xFF);
+                        pc += 2;
+                        return true;
+                    }
+                case 0x5:
+                    // 0x8XY5 - Vx -= Vy com emprestimo para VF
+                    {
+                        v[0xF] = (v[x] >= v[y]) ? 1 : 0;
+                        v[x] = static_cast<uint8_t>(v[x] - v[y]);
+                        pc += 2;
+                        return true;
+                    }
+                case 0x6:
+                    // 0x8XY6 - Vx >>= 1, VF = bit menos significativo original de Vx
+                    v[0xF] = v[x] & 0x1;
+                    v[x] = static_cast<uint8_t>(v[x] >> 1);
+                    pc += 2;
+                    return true;
+                case 0x7:
+                    // 0x8XY7 - Vx = Vy - Vx com emprestimo para VF
+                    {
+                        v[0xF] = (v[y] >= v[x]) ? 1 : 0;
+                        v[x] = static_cast<uint8_t>(v[y] - v[x]);
+                        pc += 2;
+                        return true;
+                    }
+                case 0xE:
+                    // 0x8XYE - Vx <<= 1, VF = bit mais significativo original de Vx
+                    v[0xF] = (v[x] & 0x80) ? 1 : 0;
+                    v[x] = static_cast<uint8_t>(v[x] << 1);
+                    pc += 2;
+                    return true;
+                default:
+                    // Outros sub-opcodes 0x8XY* nao implementados
+                    pc += 2;
+                    return true;
+            }
+
+        case 0x9000:
+            // 0x9XY0 - pular se Vx != Vy (apenas quando n == 0)
+            if (n == 0 && v[x] != v[y]) {
+                pc += 4;
+            } else {
+                pc += 2;
+            }
+            return true;
+
         case 0xA000:
             // 0xANNN - I = NNN
             i = nnn;
+            pc += 2;
+            return true;
+
+        case 0xB000:
+            // 0xBNNN - pular para endereco NNN + V0
+            pc = static_cast<uint16_t>(nnn + v[0]);
+            return true;
+
+        case 0xC000:
+            // 0xCXNN - Vx = valor aleatorio & NN
+            v[x] = static_cast<uint8_t>((std::rand() % 256) & kk);
             pc += 2;
             return true;
 
@@ -236,6 +357,40 @@ bool Cpu::execute(uint16_t opcode) {
                         pc += 2;
                         return true;
                     }
+                case 0x1E:
+                    // 0xFX1E - I += Vx
+                    i = static_cast<uint16_t>(i + v[x]);
+                    pc += 2;
+                    return true;
+                case 0x29:
+                    // 0xFX29 - I = endereco do sprite do digito Vx (cada sprite ocupa 5 bytes)
+                    i = static_cast<uint16_t>(v[x] * 5);
+                    pc += 2;
+                    return true;
+                case 0x33:
+                    // 0xFX33 - armazenar BCD de Vx em I, I+1, I+2
+                    {
+                        uint8_t value = v[x];
+                        memory.write(i, static_cast<uint8_t>(value / 100));
+                        memory.write(static_cast<uint16_t>(i + 1), static_cast<uint8_t>((value / 10) % 10));
+                        memory.write(static_cast<uint16_t>(i + 2), static_cast<uint8_t>(value % 10));
+                        pc += 2;
+                        return true;
+                    }
+                case 0x55:
+                    // 0xFX55 - armazenar V0..Vx na memoria a partir de I
+                    for (uint8_t k = 0; k <= x; ++k) {
+                        memory.write(static_cast<uint16_t>(i + k), v[k]);
+                    }
+                    pc += 2;
+                    return true;
+                case 0x65:
+                    // 0xFX65 - carregar V0..Vx da memoria a partir de I
+                    for (uint8_t k = 0; k <= x; ++k) {
+                        memory.read(static_cast<uint16_t>(i + k), v[k]);
+                    }
+                    pc += 2;
+                    return true;
                 default:
                     // Outros sub-opcodes 0xFX* nao implementados neste escopo
                     pc += 2;
