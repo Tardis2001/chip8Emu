@@ -1,10 +1,50 @@
 #include <SDL3/SDL.h>
+#include <atomic>
+#include <cmath>
 #include <iostream>
+#include <vector>
 
 #include "display.h"
 #include "memory.h"
 #include "rom-loader.h"
 #include "cpu.h"
+
+namespace {
+// Dados compartilhados entre a thread principal e a callback de áudio.
+struct AudioData {
+    std::atomic<bool> soundActive{false};
+    double phase = 0.0;
+};
+
+// Callback de áudio: gera onda quadrada (440 Hz) enquanto soundActive for true,
+// silêncio caso contrário. Chamada pela thread de áudio do SDL3.
+void SDLCALL audioCallback(void* userdata, SDL_AudioStream* stream, int additional_amount, int /*total_amount*/) {
+    AudioData* ad = static_cast<AudioData*>(userdata);
+    if (additional_amount <= 0) {
+        return;
+    }
+
+    const int numSamples = additional_amount / static_cast<int>(sizeof(int16_t));
+    std::vector<int16_t> buffer(numSamples, 0);
+
+    const bool active = ad->soundActive.load();
+    const double phaseInc = 2.0 * 3.14159265358979323846 * 440.0 / 44100.0;
+
+    for (int i = 0; i < numSamples; ++i) {
+        if (active) {
+            buffer[i] = (std::sin(ad->phase) >= 0.0) ? 8000 : -8000;
+        } else {
+            buffer[i] = 0;
+        }
+        ad->phase += phaseInc;
+        if (ad->phase > 2.0 * 3.14159265358979323846) {
+            ad->phase -= 2.0 * 3.14159265358979323846;
+        }
+    }
+
+    SDL_PutAudioStreamData(stream, buffer.data(), additional_amount);
+}
+} // namespace
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
@@ -27,7 +67,7 @@ int main(int argc, char* argv[]) {
 
     // Grava a ROM na memória a partir de 0x200
     if (!memory.loadRom(romData.data(), static_cast<int>(romData.size()))) {
-        std::cerr << "Falha ao gravar ROM na memória: " << romPath << std::endl;
+        std::cerr << "Falha ao gravar ROM na memoria: " << romPath << std::endl;
         return 1;
     }
 
@@ -36,7 +76,8 @@ int main(int argc, char* argv[]) {
     // Cria a CPU conectada à memória e ao display
     chip8::Cpu cpu(memory, display);
 
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
+    // Inicializa SDL (vídeo + eventos + áudio)
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_AUDIO)) {
         std::cerr << "Falha ao inicializar SDL3: " << SDL_GetError() << std::endl;
         return 1;
     }
@@ -61,6 +102,28 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // Inicialização de áudio (degradação graciosa se indisponível)
+    AudioData audioData;
+    SDL_AudioStream* audioStream = nullptr;
+    SDL_AudioSpec audioSpec{};
+    audioSpec.format = SDL_AUDIO_S16;
+    audioSpec.channels = 1;
+    audioSpec.freq = 44100;
+
+    audioStream = SDL_OpenAudioDeviceStream(
+        SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
+        &audioSpec,
+        audioCallback,
+        &audioData
+    );
+    if (!audioStream) {
+        std::cerr << "Aviso: nao foi possivel inicializar audio: " << SDL_GetError() << std::endl;
+    } else {
+        if (!SDL_ResumeAudioStreamDevice(audioStream)) {
+            std::cerr << "Aviso: nao foi possivel retomar dispositivo de audio: " << SDL_GetError() << std::endl;
+        }
+    }
+
     bool running = true;
     SDL_Event event;
     const Uint32 ms_per_frame = 16; // ~60 Hz
@@ -76,7 +139,14 @@ int main(int argc, char* argv[]) {
         if (!cpu.runCycle()) {
             std::cerr << "Erro ao executar ciclo de CPU" << std::endl;
             running = false;
+            continue;
         }
+
+        // Atualiza o flag de som com base no sound timer atual
+        audioData.soundActive.store(cpu.soundTimer > 0);
+
+        // Decrementa os timers a ~60 Hz (uma vez por frame)
+        cpu.tickTimers();
 
         // Renderiza o display sempre (o draw flag indica que algo mudou)
         display.renderDisplay(renderer);
@@ -92,6 +162,9 @@ int main(int argc, char* argv[]) {
         last_tick = current_tick;
     }
 
+    if (audioStream) {
+        SDL_DestroyAudioStream(audioStream);
+    }
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();

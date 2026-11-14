@@ -16,6 +16,10 @@ void Cpu::reset() {
     // Registrador indice I zera
     i = 0;
 
+    // Timers iniciam em zero
+    delayTimer = 0;
+    soundTimer = 0;
+
     // Program counter inicia em 0x200 (inicio dos programas CHIP-8)
     pc = PC_START;
 
@@ -31,6 +35,15 @@ void Cpu::reset() {
 
 void Cpu::clearDrawFlag() {
     drawFlag = false;
+}
+
+void Cpu::tickTimers() {
+    if (delayTimer > 0) {
+        --delayTimer;
+    }
+    if (soundTimer > 0) {
+        --soundTimer;
+    }
 }
 
 bool Cpu::fetch(uint16_t& opcode) {
@@ -147,6 +160,30 @@ bool Cpu::execute(uint16_t opcode) {
 
                 pc += 2;
                 return true;
+            }
+
+        case 0xF000:
+            // 0xFX** - opcodes de timer (e outros 0xFX* nao implementados)
+            switch (kk) {
+                case 0x07:
+                    // 0xFX07 - Vx = delay timer
+                    v[x] = delayTimer;
+                    pc += 2;
+                    return true;
+                case 0x15:
+                    // 0xFX15 - delay timer = Vx
+                    delayTimer = v[x];
+                    pc += 2;
+                    return true;
+                case 0x18:
+                    // 0xFX18 - sound timer = Vx
+                    soundTimer = v[x];
+                    pc += 2;
+                    return true;
+                default:
+                    // Outros sub-opcodes 0xFX* nao implementados neste escopo
+                    pc += 2;
+                    return true;
             }
 
         default:

@@ -26,6 +26,10 @@ public:
     // Registrador indice I (endereço de 12 bits)
     uint16_t i;
 
+    // Timers CHIP-8: delay timer e sound timer (8 bits cada)
+    uint8_t delayTimer;
+    uint8_t soundTimer;
+
     // Program counter: endereco da proxima instrucao
     uint16_t pc;
 
@@ -54,6 +58,9 @@ public:
 
     // Limpa o draw flag (chamado pelo loop de renderizacao apos ler).
     void clearDrawFlag();
+
+    // Decrementa os timers de delay e som (se > 0) em 1. Chamado a 60 Hz.
+    void tickTimers();
 
 private:
     // Inicializa registradores, PC, pilha e stack pointer.
